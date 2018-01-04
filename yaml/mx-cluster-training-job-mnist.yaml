@@ -1,0 +1,87 @@
+--- 
+apiVersion: mxnet.mlkube.io/v1beta1
+kind: MxJob
+metadata: 
+  name: mxnet-cluster-mnist-cpu
+spec: 
+  jobMode: dist
+  replicaSpecs: 
+    - 
+      PsRootPort: 9090
+      mxReplicaType: SCHEDULER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnist.py
+              command: 
+                - python
+              image: mxnet-distributed-cpu
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          restartPolicy: OnFailure
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir
+    - 
+      mxReplicaType: SERVER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnist.py
+              command: 
+                - python
+              image: mxnet-distributed-cpu
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          restartPolicy: OnFailure
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir
+    - 
+      mxReplicaType: WORKER
+      replicas: 2
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnist.py
+              command: 
+                - python
+              image: mxnet-distributed-cpu
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          restartPolicy: OnFailure
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir

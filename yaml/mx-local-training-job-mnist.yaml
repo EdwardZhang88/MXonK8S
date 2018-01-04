@@ -1,0 +1,32 @@
+--- 
+apiVersion: mxnet.mlkube.io/v1beta1
+kind: MxJob
+metadata: 
+  name: mxnet-local-mnist-cpu
+spec: 
+  jobMode: local
+  replicaSpecs: 
+    - 
+      mxReplicaType: WORKER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetLocalMnist.py
+              command: 
+                - python
+              image: "docker.mirrors.ustc.edu.cn/mxnet/python:1.0.0"
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          restartPolicy: OnFailure
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir

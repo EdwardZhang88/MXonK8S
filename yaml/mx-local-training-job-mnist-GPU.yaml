@@ -1,0 +1,35 @@
+--- 
+apiVersion: mxnet.mlkube.io/v1beta1
+kind: MxJob
+metadata: 
+  name: mxnet-local-mnist-gpu
+spec: 
+  jobMode: local
+  replicaSpecs: 
+    - 
+      mxReplicaType: WORKER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetLocalMnistGPU.py
+              command: 
+                - python
+              image: "mxnet-gpu-cuda9-dist:0.12.0"
+              imagePullPolicy: Never
+              name: mxnet
+              resources: 
+                limits: 
+                  alpha.kubernetes.io/nvidia-gpu: 1
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          restartPolicy: OnFailure
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir
