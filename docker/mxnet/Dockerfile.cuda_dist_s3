@@ -1,0 +1,40 @@
+# Start with Ubuntu base image
+FROM ubuntu:14.04
+MAINTAINER Zhang Jun
+
+# Install build-essential, git, wget and other dependencies
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  git \
+  graphviz \
+  liblapack-dev \
+  libopenblas-dev \
+  libopencv-dev \
+  python-dev \
+  python-numpy \
+  python-pip \
+  python-setuptools \
+  wget \
+  libcurl4-openssl-dev
+
+# Clone MXNet repo and move into it
+RUN cd /root && git clone --recursive https://github.com/apache/incubator-mxnet.git mxnet --branch v1.0.0 && cd mxnet && \
+    cp make/config.mk . && \
+    echo "USE_CUDA=1" >>config.mk && \
+    echo "USE_CUDNN=1" >>config.mk && \
+    echo "USE_CUDA_PATH=/usr/local/cuda" >>config.mk && \
+    echo "USE_BLAS=openblas" >>config.mk && \
+    echo "USE_LAPACK=1" >>config.mk && \
+    echo "USE_OPENCV=0" >>config.mk && \
+    echo "USE_S3=1" >>config.mk && \ 
+    echo "USE_DIST_KVSTORE=1" >>config.mk && \
+    make -j $(nproc)
+
+# Install Python package
+RUN cd /root/mxnet/python && python setup.py install
+
+# To avoid issue with lib1394
+RUN ln /dev/null /dev/raw1394
+
+# Set ~/mxnet as working directory
+WORKDIR /root/mxnet
