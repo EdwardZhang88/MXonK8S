@@ -1,0 +1,434 @@
+Cluster
+1 server
+1 worker
+1 scheduler
+
+Problem is that server seems to be unstable as it tries to re-sync with scheduler after scheduler has assigned rank to all nodes. Because of this, worker gets hung and no training is actually done.
+
+Down below is the log from scheduler
+[root@test-86-081 junzhang22]# kubectl logs -f mxnet-cluster-mnist-scheduler-qhst-0-ht5sl
+[02:02:01] src/van.cc:75: Bind to role=scheduler, id=1, ip=mxnet-cluster-mnist-scheduler-qhst-0, port=9080, is_recovery=0
+[02:02:01] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, ip=192.168.18.183, port=49192, is_recovery=0 } }
+[02:02:02] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=worker, ip=192.168.18.189, port=35837, is_recovery=0 } }
+[02:02:02] src/van.cc:235: assign rank=9 to node role=worker, ip=192.168.18.189, port=35837, is_recovery=0
+[02:02:02] src/van.cc:235: assign rank=8 to node role=server, ip=192.168.18.183, port=49192, is_recovery=0
+[02:02:02] src/van.cc:136: ? => 9. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=worker, id=9, ip=192.168.18.189, port=35837, is_recovery=0 role=server, id=8, ip=192.168.18.183, port=49192, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-scheduler-qhst-0, port=9080, is_recovery=0 } }
+[02:02:02] src/van.cc:136: ? => 8. Meta: request=0, timestamp=1, control={ cmd=ADD_NODE, node={ role=worker, id=9, ip=192.168.18.189, port=35837, is_recovery=0 role=server, id=8, ip=192.168.18.183, port=49192, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-scheduler-qhst-0, port=9080, is_recovery=0 } }
+[02:02:02] src/van.cc:251: the scheduler is connected to 1 workers and 1 servers
+[02:02:02] src/van.cc:136: ? => 1. Meta: request=1, timestamp=2, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:161: 1 => 1. Meta: request=1, timestamp=2, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:291: Barrier count for 7 : 1
+[02:02:02] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:291: Barrier count for 7 : 2
+[02:02:02] src/van.cc:161: 8 => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:291: Barrier count for 7 : 3
+[02:02:02] src/van.cc:136: ? => 9. Meta: request=0, timestamp=3, control={ cmd=BARRIER, barrier_group=0 }
+[02:02:02] src/van.cc:136: ? => 8. Meta: request=0, timestamp=4, control={ cmd=BARRIER, barrier_group=0 }
+[02:02:02] src/van.cc:136: ? => 1. Meta: request=0, timestamp=5, control={ cmd=BARRIER, barrier_group=0 }
+[02:02:02] src/van.cc:161: 1 => 1. Meta: request=0, timestamp=5, control={ cmd=BARRIER, barrier_group=0 }
+[02:02:02] src/van.cc:136: ? => 1. Meta: request=1, timestamp=6, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:161: 1 => 1. Meta: request=1, timestamp=6, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:291: Barrier count for 7 : 1
+[02:02:09] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, ip=192.168.18.183, port=49167, is_recovery=0 } }
+
+
+Down below is the log from server
+[root@test-86-081 ~]# kubectl logs -f mxnet-cluster-mnist-server-qhst-0-t6pcw
+[02:02:09] src/van.cc:75: Bind to role=server, ip=192.168.18.183, port=49167, is_recovery=0
+[02:02:09] src/van.cc:136: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, ip=192.168.18.183, port=49167, is_recovery=0 } }
+
+
+There are 2 possible reasons:
+1. Server container was terminated and restarted. Watch closly next time I start the same traing job. If the server container did get re-created, it has to be the reason and I must find a way to avoid it.
+2. Since I am using CPU version docker image for server and scheduler while GPU image for worker, maybe I should try using the same image for all 3.
+
+Down below is what a nmormal scheduler log looks like for a 2 worker + 1 server cluster just for reference
+[root@test-86-081 junzhang22]# kubectl logs -f mxnet-cluster-mnist-cpu-scheduler-0r9h-0-j6nsl
+[02:15:00] src/van.cc:75: Bind to role=scheduler, id=1, ip=mxnet-cluster-mnist-cpu-scheduler-0r9h-0, port=9090, is_recovery=0
+[02:15:01] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, ip=192.168.18.182, port=37482, is_recovery=0 } }
+[02:15:01] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=worker, ip=192.168.18.135, port=44318, is_recovery=0 } }
+[02:15:01] src/van.cc:161: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=worker, ip=192.168.18.181, port=40802, is_recovery=0 } }
+[02:15:01] src/van.cc:235: assign rank=8 to node role=server, ip=192.168.18.182, port=37482, is_recovery=0
+[02:15:01] src/van.cc:235: assign rank=9 to node role=worker, ip=192.168.18.181, port=40802, is_recovery=0
+[02:15:01] src/van.cc:235: assign rank=11 to node role=worker, ip=192.168.18.135, port=44318, is_recovery=0
+[02:15:01] src/van.cc:136: ? => 9. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, id=8, ip=192.168.18.182, port=37482, is_recovery=0 role=worker, id=9, ip=192.168.18.181, port=40802, is_recovery=0 role=worker, id=11, ip=192.168.18.135, port=44318, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-cpu-scheduler-0r9h-0, port=9090, is_recovery=0 } }
+[02:15:01] src/van.cc:136: ? => 11. Meta: request=0, timestamp=1, control={ cmd=ADD_NODE, node={ role=server, id=8, ip=192.168.18.182, port=37482, is_recovery=0 role=worker, id=9, ip=192.168.18.181, port=40802, is_recovery=0 role=worker, id=11, ip=192.168.18.135, port=44318, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-cpu-scheduler-0r9h-0, port=9090, is_recovery=0 } }
+[02:15:01] src/van.cc:136: ? => 8. Meta: request=0, timestamp=2, control={ cmd=ADD_NODE, node={ role=server, id=8, ip=192.168.18.182, port=37482, is_recovery=0 role=worker, id=9, ip=192.168.18.181, port=40802, is_recovery=0 role=worker, id=11, ip=192.168.18.135, port=44318, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-cpu-scheduler-0r9h-0, port=9090, is_recovery=0 } }
+[02:15:01] src/van.cc:251: the scheduler is connected to 2 workers and 1 servers
+[02:15:01] src/van.cc:136: ? => 1. Meta: request=1, timestamp=3, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:161: 1 => 1. Meta: request=1, timestamp=3, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:291: Barrier count for 7 : 1
+[02:15:01] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:291: Barrier count for 7 : 2
+[02:15:01] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:291: Barrier count for 7 : 3
+[02:15:01] src/van.cc:161: 8 => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:291: Barrier count for 7 : 4
+[02:15:01] src/van.cc:136: ? => 9. Meta: request=0, timestamp=4, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:01] src/van.cc:136: ? => 11. Meta: request=0, timestamp=5, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:01] src/van.cc:136: ? => 8. Meta: request=0, timestamp=6, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:01] src/van.cc:136: ? => 1. Meta: request=0, timestamp=7, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:01] src/van.cc:161: 1 => 1. Meta: request=0, timestamp=7, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:01] src/van.cc:136: ? => 1. Meta: request=1, timestamp=8, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:161: 1 => 1. Meta: request=1, timestamp=8, control={ cmd=BARRIER, barrier_group=7 }
+[02:15:01] src/van.cc:291: Barrier count for 7 : 1
+[02:15:02] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=2, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:02] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=2, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=9, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=10, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=3, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=3, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=11, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=12, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=4, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=4, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=13, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=14, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=5, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=5, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=15, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=16, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=6, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=6, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=17, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=18, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:161: 11 => 1. Meta: request=1, timestamp=7, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 1
+[02:15:03] src/van.cc:161: 9 => 1. Meta: request=1, timestamp=7, control={ cmd=BARRIER, barrier_group=4 }
+[02:15:03] src/van.cc:291: Barrier count for 4 : 2
+[02:15:03] src/van.cc:136: ? => 9. Meta: request=0, timestamp=19, control={ cmd=BARRIER, barrier_group=0 }
+[02:15:03] src/van.cc:136: ? => 11. Meta: request=0, timestamp=20, control={ cmd=BARRIER, barrier_group=0 }
+
+
+After a careful check, it is true that server got terminated once. Below is the error.
+[02:02:01] src/van.cc:75: Bind to role=server, ip=192.168.18.183, port=49192, is_recovery=0
+[02:02:01] src/van.cc:136: ? => 1. Meta: request=0, timestamp=0, control={ cmd=ADD_NODE, node={ role=server, ip=192.168.18.183, port=49192, is_recovery=0 } }
+[02:02:02] src/van.cc:161: 1 => 2147483647. Meta: request=0, timestamp=1, control={ cmd=ADD_NODE, node={ role=worker, id=9, ip=192.168.18.189, port=35837, is_recovery=0 role=server, id=8, ip=192.168.18.183, port=49192, is_recovery=0 role=scheduler, id=1, ip=mxnet-cluster-mnist-scheduler-qhst-0, port=9080, is_recovery=0 } }
+[02:02:02] src/van.cc:281: S[8] is connected to others
+[02:02:02] src/van.cc:136: ? => 1. Meta: request=1, timestamp=1, control={ cmd=BARRIER, barrier_group=7 }
+[02:02:02] src/van.cc:161: 1 => 8. Meta: request=0, timestamp=4, control={ cmd=BARRIER, barrier_group=0 }
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=0, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=401408 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=0, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=1, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=2, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=512 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=1, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=401408 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=2, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=3, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=3, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=512 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=4, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=32768 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=4, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=5, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=6, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=256 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=5, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=32768 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=6, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=7, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=7, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=256 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=8, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=2560 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=8, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=9, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=10, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=40 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=9, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=2560 data_size=4
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=10, customer_id=0, simple_app=0, push=1, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=11, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=11, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=40 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=12, customer_id=0, simple_app=1, push=0, head=0, body=ccopy_reg
+_reconstructor
+p0
+(cmxnet.optimizer
+SGD
+p1
+c__builtin__
+object
+p2
+Ntp3
+Rp4
+(dp5
+S'param_dict'
+p6
+(dp7
+sS'wd'
+p8
+F0.0
+sS'lr_mult'
+p9
+(dp10
+sS'lr_scheduler'
+p11
+NsS'multi_precision'
+p12
+I00
+sS'_index_update_count'
+p13
+(dp14
+sS'rescale_grad'
+p15
+F0.01
+sS'clip_gradient'
+p16
+NsS'wd_mult'
+p17
+(dp18
+S'fc2_bias'
+p19
+F0.0
+sS'fc3_bias'
+p20
+F0.0
+sS'fc1_bias'
+p21
+F0.0
+ssS'lr'
+p22
+F0.1
+sS'num_update'
+p23
+I0
+sS'sym'
+p24
+cmxnet.symbol.symbol
+Symbol
+p25
+(Ntp26
+Rp27
+(dp28
+S'handle'
+p29
+S'{\n  "nodes": [\n    {\n      "op": "null", \n      "name": "data", \n      "inputs": []\n    }, \n    {\n      "op": "Flatten", \n      "name": "flatten0", \n      "inputs": [[0, 0, 0]]\n    }, \n    {\n      "op": "null", \n      "name": "fc1_weight", \n      "attr": {"num_hidden": "128"}, \n      "inputs": []\n    }, \n    {\n      "op": "null", \n      "name": "fc1_bias", \n      "attr": {"num_hidden": "128"}, \n      "inputs": []\n    }, \n    {\n      "op": "FullyConnected", \n      "name": "fc1", \n      "attr": {"num_hidden": "128"}, \n      "inputs": [[1, 0, 0], [2, 0, 0], [3, 0, 0]]\n    }, \n    {\n      "op": "Activation", \n      "name": "relu1", \n      "attr": {"act_type": "relu"}, \n      "inputs": [[4, 0, 0]]\n    }, \n    {\n      "op": "null", \n      "name": "fc2_weight", \n      "attr": {"num_hidden": "64"}, \n      "inputs": []\n    }, \n    {\n      "op": "null", \n      "name": "fc2_bias", \n      "attr": {"num_hidden": "64"}, \n      "inputs": []\n    }, \n    {\n      "op": "FullyConnected", \n      "name": "fc2", \n      "attr": {"num_hidden": "64"}, \n      "inputs": [[5, 0, 0], [6, 0, 0], [7, 0, 0]]\n    }, \n    {\n      "op": "Activation", \n      "name": "relu2", \n      "attr": {"act_type": "relu"}, \n      "inputs": [[8, 0, 0]]\n    }, \n    {\n      "op": "null", \n      "name": "fc3_weight", \n      "attr": {"num_hidden": "10"}, \n      "inputs": []\n    }, \n    {\n      "op": "null", \n      "name": "fc3_bias", \n      "attr": {"num_hidden": "10"}, \n      "inputs": []\n    }, \n    {\n      "op": "FullyConnected", \n      "name": "fc3", \n      "attr": {"num_hidden": "10"}, \n      "inputs": [[9, 0, 0], [10, 0, 0], [11, 0, 0]]\n    }, \n    {\n      "op": "null", \n      "name": "softmax_label", \n      "inputs": []\n    }, \n    {\n      "op": "SoftmaxOutput", \n      "name": "softmax", \n      "inputs": [[12, 0, 0], [13, 0, 0]]\n    }\n  ], \n  "arg_nodes": [0, 2, 3, 6, 7, 10, 11, 13], \n  "node_row_ptr": [\n    0, \n    1, \n    2, \n    3, \n    4, \n    5, \n    6, \n    7, \n    8, \n    9, \n    10, \n    11, \n    12, \n    13, \n    14, \n    15\n  ], \n  "heads": [[14, 0, 0]], \n  "attrs": {"mxnet_version": ["int", 1201]}\n}'
+p30
+sbsS'idx2name'
+p31
+(dp32
+I0
+S'fc1_weight'
+p33
+sI1
+g21
+sI2
+S'fc2_weight'
+p34
+sI3
+g19
+sI4
+S'fc3_weight'
+p35
+sI5
+g20
+ssS'momentum'
+p36
+F0.0
+sS'begin_num_update'
+p37
+I0
+sb.
+Traceback (most recent call last):
+  File "_ctypes/callbacks.c", line 314, in 'calling callback function'
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/kvstore_server.py", line 55, in server_controller
+    optimizer = pickle.loads(cmd_body)
+  File "/usr/lib/python2.7/pickle.py", line 1382, in loads
+    return Unpickler(file).load()
+  File "/usr/lib/python2.7/pickle.py", line 858, in load
+    dispatch[key](self)
+  File "/usr/lib/python2.7/pickle.py", line 1090, in load_global
+    klass = self.find_class(module, name)
+  File "/usr/lib/python2.7/pickle.py", line 1124, in find_class
+    __import__(module)
+ImportError: No module named symbol
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=12, customer_id=0, simple_app=1, push=127, head=0
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=13, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=2560 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=14, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=40 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=15, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=256 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=16, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=512 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=17, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=32768 data_size=4
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=18, customer_id=0, simple_app=0, push=1, head=0, data_type={ UINT64 FLOAT INT32 } Body: data_size=8 data_size=401408 data_size=4
+[02:02:08] /root/mxnet/dmlc-core/include/dmlc/logging.h:308: [02:02:08] src/kvstore/././kvstore_dist_server.h:220: Check failed: updater_ 
+
+Stack trace returned 10 entries:
+[bt] (0) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZN4dmlc15LogMessageFatalD1Ev+0x3c) [0x7f3a6c0efa1c]
+[bt] (1) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZZN5mxnet7kvstore17KVStoreDistServer10DataHandleERKN2ps6KVMetaERKNS2_7KVPairsIfEEPNS2_8KVServerIfEEENKUlvE0_clEv+0xa9) [0x7f3a6cefb4f9]
+[bt] (2) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZN5mxnet7kvstore11KVStoreDist9RunServerERKSt8functionIFviRKSsEE+0x2c5) [0x7f3a6cf068f5]
+[bt] (3) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(MXKVStoreRunServer+0x6f) [0x7f3a6cdc588f]
+[bt] (4) /usr/lib/x86_64-linux-gnu/libffi.so.6(ffi_call_unix64+0x4c) [0x7f3a6fb4dc7c]
+[bt] (5) /usr/lib/x86_64-linux-gnu/libffi.so.6(ffi_call+0x1fc) [0x7f3a6fb4d5ac]
+[bt] (6) /usr/lib/python2.7/lib-dynload/_ctypes.x86_64-linux-gnu.so(_ctypes_callproc+0x48e) [0x7f3a6fd645fe]
+[bt] (7) /usr/lib/python2.7/lib-dynload/_ctypes.x86_64-linux-gnu.so(+0x15f9e) [0x7f3a6fd65f9e]
+[bt] (8) python(PyEval_EvalFrameEx+0x965) [0x4c84a5]
+[bt] (9) python(PyEval_EvalCodeEx+0x2ac) [0x4cfedc]
+
+[02:02:08] src/van.cc:136: ? => 9. Meta: request=0, timestamp=13, customer_id=0, simple_app=0, push=1, head=0
+Traceback (most recent call last):
+  File "/workdir/script/mxnetClusterMnistGPU.py", line 4, in <module>
+    import mxnet as mx
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/__init__.py", line 56, in <module>
+[02:02:08] src/van.cc:161: 9 => 8. Meta: request=1, timestamp=19, customer_id=0, simple_app=0, push=0, head=0, data_type={ UINT64 FLOAT } Body: data_size=8 data_size=0
+    from . import kvstore_server
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/kvstore_server.py", line 85, in <module>
+    _init_kvstore_server_module()
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/kvstore_server.py", line 82, in _init_kvstore_server_module
+    server.run()
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/kvstore_server.py", line 73, in run
+    check_call(_LIB.MXKVStoreRunServer(self.handle, _ctrl_proto(self._controller()), None))
+  File "/usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/base.py", line 129, in check_call
+    raise MXNetError(py_str(_LIB.MXGetLastError()))
+mxnet.base.MXNetError: [02:02:08] src/kvstore/././kvstore_dist_server.h:220: Check failed: updater_ 
+
+Stack trace returned 10 entries:
+[bt] (0) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZN4dmlc15LogMessageFatalD1Ev+0x3c) [0x7f3a6c0efa1c]
+[bt] (1) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZZN5mxnet7kvstore17KVStoreDistServer10DataHandleERKN2ps6KVMetaERKNS2_7KVPairsIfEEPNS2_8KVServerIfEEENKUlvE0_clEv+0xa9) [0x7f3a6cefb4f9]
+[bt] (2) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(_ZN5mxnet7kvstore11KVStoreDist9RunServerERKSt8functionIFviRKSsEE+0x2c5) [0x7f3a6cf068f5]
+[bt] (3) /usr/local/lib/python2.7/dist-packages/mxnet-0.11.0-py2.7.egg/mxnet/libmxnet.so(MXKVStoreRunServer+0x6f) [0x7f3a6cdc588f]
+[bt] (4) /usr/lib/x86_64-linux-gnu/libffi.so.6(ffi_call_unix64+0x4c) [0x7f3a6fb4dc7c]
+[bt] (5) /usr/lib/x86_64-linux-gnu/libffi.so.6(ffi_call+0x1fc) [0x7f3a6fb4d5ac]
+[bt] (6) /usr/lib/python2.7/lib-dynload/_ctypes.x86_64-linux-gnu.so(_ctypes_callproc+0x48e) [0x7f3a6fd645fe]
+[bt] (7) /usr/lib/python2.7/lib-dynload/_ctypes.x86_64-linux-gnu.so(+0x15f9e) [0x7f3a6fd65f9e]
+[bt] (8) python(PyEval_EvalFrameEx+0x965) [0x4c84a5]
+[bt] (9) python(PyEval_EvalCodeEx+0x2ac) [0x4cfedc]
+
+terminate called without an active exception
+
+1. Try with a new distributed container for server and woker
+After changing the container for server and worker to GPU version, I am getting error for both now.
+[root@test-86-081 junzhang22]# kubectl logs mxnet-cluster-mnist-gpu-server-er8b-0-wlrvk
+sh: 1: sudo: not found
+Traceback (most recent call last):
+  File "/workdir/script/mxnetClusterMnistGPU.py", line 4, in <module>
+    import mxnet as mx
+  File "/mxnet/python/mxnet/__init__.py", line 25, in <module>
+    from .base import MXNetError
+  File "/mxnet/python/mxnet/base.py", line 111, in <module>
+    _LIB = _load_lib()
+  File "/mxnet/python/mxnet/base.py", line 103, in _load_lib
+    lib = ctypes.CDLL(lib_path[0], ctypes.RTLD_LOCAL)
+  File "/usr/lib/python2.7/ctypes/__init__.py", line 362, in __init__
+    self._handle = _dlopen(self._name, mode)
+OSError: libcuda.so.1: cannot open shared object file: No such file or directory
+
+
+Let me try mounting the GPU drive manually for both in YAML.
+--- 
+apiVersion: mxnet.mlkube.io/v1beta1
+kind: MxJob
+metadata: 
+  name: mxnet-cluster-mnist-gpu
+spec: 
+  jobMode: dist
+  replicaSpecs: 
+    - 
+      PsRootPort: 9080
+      mxReplicaType: SCHEDULER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnistGPU.py
+              command: 
+                - python
+              image: "mxnet-gpu-cuda9-dist:0.12.0"
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+                - 
+                  mountPath: /usr/local/nvidia
+                  name: nvidia-libraries
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          restartPolicy: OnFailure
+          volumes: 
+            - 
+              hostPath: 
+                name: workdir
+                path: /root/junzhang22/mxnet_training
+            - 
+              hostPath: 
+                name: nvidia-libraries
+                path: /var/lib/nvidia-docker/volumes/nvidia_driver/387.26
+    - 
+      mxReplicaType: SERVER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnistGPU.py
+              command: 
+                - python
+              image: "mxnet-gpu-cuda9-dist:0.12.0"
+              imagePullPolicy: Never
+              name: mxnet
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+                - 
+                  mountPath: /usr/local/nvidia
+                  name: nvidia-libraries
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          restartPolicy: OnFailure
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir
+            - 
+              hostPath: 
+                name: nvidia-libraries
+                path: /var/lib/nvidia-docker/volumes/nvidia_driver/387.26
+    - 
+      mxReplicaType: WORKER
+      replicas: 1
+      template: 
+        spec: 
+          containers: 
+            - 
+              args: 
+                - /workdir/script/mxnetClusterMnistGPU.py
+              command: 
+                - python
+              image: "mxnet-gpu-cuda9-dist:0.12.0"
+              imagePullPolicy: Never
+              name: mxnet
+              resources: 
+                limits: 
+                  alpha.kubernetes.io/nvidia-gpu: 1
+              volumeMounts: 
+                - 
+                  mountPath: /workdir
+                  name: workdir
+          nodeSelector: 
+            kubernetes.io/hostname: test-86-081
+          restartPolicy: OnFailure
+          volumes: 
+            - 
+              hostPath: 
+                path: /root/junzhang22/mxnet_training
+              name: workdir
+Adding the GPU lib mount won't work. mx-operator doesn't respond at all!!!
+It seems to be that my YAML was corrupt at that time.
+
+Interesting thing is when I explicitly mount the GPU drive when running the container, I am able to import mxnet without the error 'OSError: libcuda.so.1: cannot open shared object file: No such file or directory'.
+docker run -it -v /var/lib/nvidia-docker/volumes/nvidia_driver/387.26:/usr/local/nvidia mxnet-gpu-cuda9-dist:0.12.0  /bin/bash
+
+I doubt that the configMap takes effect in injecting the GPU drive mount. Since both scheduler and worker containers have been terminated, I can only get into woker container and GPU drive was mounted correctly there.
+
+And I am right. GPU drive is mounted only when GPU resource is requested.
+Dada! Problem solved! I just need to manually add GPU mount to server and scheduler in YAML. Well, I have to say this is ugly. I still believe that a well-compliled CPU image shoudl work as well for server and scheduler. Maybe I will just need to complile a new image and see.
+
+
+2. CHeckout the source code and figure out the root cause
+3. Raise a bug to MXNET community about scheduler failing to respond to server's rejoining
